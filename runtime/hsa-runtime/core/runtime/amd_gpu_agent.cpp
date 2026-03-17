@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -47,6 +47,7 @@
 #include <cstring>
 #include <climits>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include <memory>
@@ -81,6 +82,9 @@
 #include <amdgpu.h>
 #endif
 
+#ifdef HSA_ENABLE_AMDCUID_SUPPORT
+#include "amd_cuid.h"
+#endif
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -99,6 +103,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       scratch_used_large_(0),
       queues_(),
+      queue_pool_(this),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
       doorbell_queue_map_(NULL),
@@ -208,6 +213,9 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   // Initialize libdrm device handle
   InitLibDrm();
 
+  // Store CUID for this agent
+  InitDerivedCuid();
+
 #if !defined(__linux__)
   wallclock_frequency_ = 0;
 #else
@@ -217,10 +225,15 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   if (model_enabled) {
     wallclock_frequency_ = 0;
   } else {
-    // Get wallclock freq
-    err = driver().GetWallclockFrequency(node_id(), &wallclock_frequency_);
-    if (err != HSA_STATUS_SUCCESS) {
-      throw AMD::hsa_exception(err, "Agent creation failed.\nGetWallclockFrequency error.\n");
+    // Prefer cached node properties when available (in KHz)
+    if (properties_.WallClockKHz != 0) {
+      wallclock_frequency_ = uint64_t(properties_.WallClockKHz) * 1000ull;
+    } else {
+      // Fallback to driver query if properties do not provide it
+      err = driver().GetWallclockFrequency(node_id(), &wallclock_frequency_);
+      if (err != HSA_STATUS_SUCCESS) {
+        throw AMD::hsa_exception(err, "Agent creation failed.\nGetWallclockFrequency error.\n");
+      }
     }
   }
 #endif
@@ -244,7 +257,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 }
 
 GpuAgent::~GpuAgent() {
-  std::for_each(regions_.begin(), regions_.end(), DeleteObject());
+  for (auto& blit : blits_) blit.reset();
+
   regions_.clear();
 }
 
@@ -452,22 +466,20 @@ void GpuAgent::InitRegionList() {
           memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH: {
-          MemoryRegion* region =
-              new MemoryRegion(false, false, false, false, true, this, mem_props[mem_idx]);
-
+          std::shared_ptr<MemoryRegion> region = std::make_shared<MemoryRegion>(false, false, false, false, true, this, mem_props[mem_idx]);
           regions_.push_back(region);
 
           if (region->IsLocalMemory()) {
             // Extended Fine-Grain memory
             if (!(isa_->GetMajorVersion() == 12 && isa_->GetMinorVersion() == 0))
               regions_.push_back(
-                  new MemoryRegion(false, false, false, true, true, this, mem_props[mem_idx]));
+                  std::make_shared<MemoryRegion>(false, false, false, true, true, this, mem_props[mem_idx]));
 
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
             bool user_visible = (properties_.HiveID != 0) ||
                 core::Runtime::runtime_singleton_->flag().fine_grain_pcie();
 
-            regions_.push_back(new MemoryRegion(true, false, false, false, user_visible, this,
+            regions_.push_back(std::make_shared<MemoryRegion>(true, false, false, false, user_visible, this,
                                                 mem_props[mem_idx]));
           }
           break;
@@ -491,6 +503,15 @@ void GpuAgent::InitRegionList() {
 }
 
 void GpuAgent::InitScratchPool() {
+
+  if (!core::Runtime::runtime_singleton_->flag().enable_scratch()) {
+    scratch_pool_. ~SmallHeap();
+
+    // Reconstruct the object as default to allow ~GpuAgent to destruct the member variable
+    new (&scratch_pool_) SmallHeap();
+    return;
+  }
+
   scratch_per_thread_ =
       core::Runtime::runtime_singleton_->flag().scratch_mem_size();
   if (scratch_per_thread_ == 0)
@@ -550,7 +571,7 @@ void GpuAgent::ReserveScratch()
   size_t available;
   hsa_status_t err = driver().AvailableMemory(node_id(), &available);
   assert(err == HSA_STATUS_SUCCESS && "AvailableMemory failed");
-  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  std::lock_guard<std::mutex> lock(scratch_lock_);
   if (!scratch_cache_.reserved_bytes() && reserved_sz && available > 8 * reserved_sz) {
     HSAuint64 alt_va;
     void* reserved_base = scratch_pool_.alloc(reserved_sz);
@@ -592,6 +613,39 @@ void GpuAgent::InitCacheList() {
                                      cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
 }
 
+void GpuAgent::InitDerivedCuid() {
+  memset(derived_cuid_, 0, sizeof(derived_cuid_));
+
+#ifdef HSA_ENABLE_AMDCUID_SUPPORT
+  // Build the render node path from system property
+  std::string device_node =
+      "/sys/class/drm/renderD" + std::to_string(properties_.DrmRenderMinor);
+
+  // Retrieve the handle for a GPU device using its system path
+  amdcuid_id_t handle{};
+  amdcuid_status_t status =
+      amdcuid_get_handle_by_dev_path(device_node.c_str(), AMDCUID_DEVICE_TYPE_GPU, &handle);
+  
+  if (status != AMDCUID_STATUS_SUCCESS) {
+    debug_print("Secondary CUID not available: failed to get device handle.\n");
+    return;
+  }
+
+  // Query the derived CUID using the device handle
+  uint32_t cuid_length;
+  status = amdcuid_query_device_property(handle, AMDCUID_QUERY_DERIVED_CUID, 
+                                         derived_cuid_, &cuid_length);
+
+  if (status != AMDCUID_STATUS_SUCCESS) {
+    debug_print("Secondary CUID not available: query failed.\n");
+    memset(derived_cuid_, 0, sizeof(derived_cuid_));
+  }
+
+#else
+  debug_print("Secondary CUID not available: AMDCUID support not enabled.\n");
+#endif
+}
+
 void GpuAgent::InitLibDrm() {
   hsa_status_t status;
 
@@ -602,6 +656,7 @@ void GpuAgent::InitLibDrm() {
                              "Agent creation failed.\nlibdrm get device handle failed.\n");
 
   ldrm_dev_ = (amdgpu_device_handle)device_handle;
+  libthunk_dev_ = device_handle;
 }
 
 hsa_status_t GpuAgent::IterateRegion(
@@ -665,20 +720,20 @@ hsa_status_t GpuAgent::VisitRegion(bool include_peer,
 }
 
 hsa_status_t GpuAgent::VisitRegion(
-    const std::vector<const core::MemoryRegion*>& regions,
+    const std::vector<std::shared_ptr<const core::MemoryRegion>>& regions,
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
   AMD::callback_t<decltype(callback)> call(callback);
-  for (const core::MemoryRegion* region : regions) {
+  for (const auto& region : regions) {
     if (!region->user_visible()) continue;
 
     const AMD::MemoryRegion* amd_region =
-        reinterpret_cast<const AMD::MemoryRegion*>(region);
+        reinterpret_cast<const AMD::MemoryRegion*>(region.get());
 
     // Only expose system, local, and LDS memory.
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
         amd_region->IsLDS()) {
-      hsa_region_t region_handle = core::MemoryRegion::Convert(region);
+      hsa_region_t region_handle = core::MemoryRegion::Convert(region.get());
       hsa_status_t status = call(region_handle, data);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
@@ -708,22 +763,29 @@ core::Queue* GpuAgent::CreateInterceptibleQueue(void (*callback)(hsa_status_t st
 core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi, int rec_eng) {
   AMD::BlitSdmaBase* sdma;
   size_t copy_size_override = 0;
-  const size_t copy_size_overrides[2] = {0x3fffff, 0x3fffffff};
+  constexpr size_t copy_size_overrides[2] = {0x3fffff, 0x3fffffff};
+
+  /*
+   * On DXG SDMA packets placed in the queue are wrapped inside GCR packets by
+   * underlying driver and submitted into another queue. So GCR is not needed.
+   */
+  auto isDXG = core::Runtime::runtime_singleton_->thunkLoader()->IsDXG();
 
   switch (isa_->GetMajorVersion()) {
     case 9:
       sdma = new BlitSdmaV4();
-      copy_size_override = (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10) ?
+      copy_size_override = (isa_->GetMinorVersion() > 4 ||
+                            (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10)) ?
                             copy_size_overrides[1] : copy_size_overrides[0];
       break;
     case 10:
-      sdma = new BlitSdmaV5();
+      sdma = (isDXG ? static_cast<BlitSdmaBase*>(new BlitSdmaV4()) : static_cast<BlitSdmaBase*>(new BlitSdmaV5()));
       copy_size_override = isa_->GetMinorVersion() < 3 ? copy_size_overrides[0] :
                                                          copy_size_overrides[1];
       break;
     case 11:
     case 12:
-      sdma = new BlitSdmaV5();
+      sdma = (isDXG ? static_cast<BlitSdmaBase*>(new BlitSdmaV4()) : static_cast<BlitSdmaBase*>(new BlitSdmaV5()));
       copy_size_override = copy_size_overrides[1];
       break;
     default:
@@ -738,7 +800,7 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi, int rec_eng) {
   rec_eng = uses_rec_sdma_eng_id_mask_ || !use_xgmi ? rec_eng : -1;
 
   if (sdma->Initialize(*this, use_xgmi, copy_size_override, rec_eng) != HSA_STATUS_SUCCESS) {
-    sdma->Destroy(*this);
+    sdma->Destroy();
     delete sdma;
     sdma = nullptr;
   }
@@ -750,7 +812,7 @@ core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
   AMD::BlitKernel* kernl = new AMD::BlitKernel(queue);
 
   if (kernl->Initialize(*this) != HSA_STATUS_SUCCESS) {
-    kernl->Destroy(*this);
+    kernl->Destroy();
     delete kernl;
     kernl = NULL;
   }
@@ -760,13 +822,13 @@ core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
 
 void GpuAgent::InitDma() {
   // Setup lazy init pointers on queues and blits.
-  auto queue_lambda = [this](HSA_QUEUE_PRIORITY priority = HSA_QUEUE_PRIORITY_NORMAL) {
+  auto queue_lambda = [this](HSA::hsa_amd_queue_priority_internal_t priority = HSA::HSA_AMD_QUEUE_PRIORITY_NORMAL) {
     auto queue = CreateInterceptibleQueue();
     if (queue == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");
 
-    if (priority != HSA_QUEUE_PRIORITY_NORMAL)
+    if (priority != HSA::HSA_AMD_QUEUE_PRIORITY_NORMAL)
       if (queue->SetPriority(priority) != HSA_STATUS_SUCCESS)
         throw AMD::hsa_exception(HSA_STATUS_ERROR,
                                 "Failed to increase queue priority for PC Sampling");
@@ -781,7 +843,7 @@ void GpuAgent::InitDma() {
   // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
   // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
   // other dispatches/barriers that could be in the other AQL queues.
-  queues_[QueuePCSampling].reset([queue_lambda]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
+  queues_[QueuePCSampling].reset([queue_lambda]() { return queue_lambda(HSA::HSA_AMD_QUEUE_PRIORITY_MAXIMUM); });
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev, uint32_t rec_eng) {
@@ -895,7 +957,7 @@ void GpuAgent::InitGWS() {
 }
 
 void GpuAgent::GWSRelease() {
-  ScopedAcquire<KernelMutex> lock(&gws_queue_.lock_);
+  std::lock_guard<std::mutex> lock(gws_queue_.lock_);
   gws_queue_.ref_ct_--;
   if (gws_queue_.ref_ct_ != 0) return;
   InitGWS();
@@ -910,9 +972,13 @@ void GpuAgent::PreloadBlits() {
 void GpuAgent::ReleaseResources() {
   if (this->Enabled()) {
     this->Disable();
+
+    // Remove all shared hardware queues from pool
+    queue_pool_.Cleanup();
+
     for (auto& blit : blits_) {
       if (!blit.empty()) {
-        hsa_status_t status = blit->Destroy(*this);
+        hsa_status_t status = blit->Destroy();
         assert(status == HSA_STATUS_SUCCESS);
       }
     }
@@ -953,22 +1019,22 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size) {
 }
 
 void GpuAgent::SetCopyRequestRefCount(bool set) {
-  ScopedAcquire<KernelMutex> lock(&blit_lock_);
+  std::unique_lock<std::mutex> lock(blit_lock_);
   while (pending_copy_stat_check_ref_) {
-    blit_lock_.Release();
+    lock.unlock();
     os::YieldThread();
-    blit_lock_.Acquire();
+    lock.lock();
   }
   if (!set && pending_copy_req_ref_) pending_copy_req_ref_--;
   else pending_copy_req_ref_++;
 }
 
 void GpuAgent::SetCopyStatusCheckRefCount(bool set) {
-  ScopedAcquire<KernelMutex> lock(&blit_lock_);
+  std::unique_lock<std::mutex> lock(blit_lock_);
   while (pending_copy_req_ref_) {
-    blit_lock_.Release();
+    lock.unlock();
     os::YieldThread();
-    blit_lock_.Acquire();
+    lock.lock();
   }
   if (!set && pending_copy_stat_check_ref_) pending_copy_stat_check_ref_--;
   else pending_copy_stat_check_ref_++;
@@ -1007,7 +1073,7 @@ static bool GangCopyCompleteHandler(hsa_signal_value_t, void *arg ) {
       return false;
     }
   }
-  return true;
+  return false;
 }
 
 hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
@@ -1016,8 +1082,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
   // Recommended SDMA engine copies only have gang factor 1
-  uint32_t rec_sdma_eng = ffs(rec_sdma_eng_id_peers_info_[dst_agent.public_handle().handle]);
-
+  uint32_t rec_sdma_eng =
+    rocr::os::Ffs(rec_sdma_eng_id_peers_info_[dst_agent.public_handle().handle]);
   if (rec_sdma_eng)
     return DmaCopyOnEngine(dst, dst_agent, src, src_agent, size,
                            dep_signals, out_signal, rec_sdma_eng, false);
@@ -1044,7 +1110,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                       std::min(gang_factor, properties_.NumSdmaXgmiEngines);
   }
 
-  ScopedAcquire<KernelMutex> lock(&sdma_gang_lock_);
+  std::lock_guard<std::mutex> lock(sdma_gang_lock_);
   // Manage internal gang signals
   std::vector<core::Signal*> gang_signals;
   if (gang_factor > 1) {
@@ -1244,11 +1310,301 @@ hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_ag
 
 hsa_status_t GpuAgent::DmaPreferredEngine(core::Agent& dst_agent, core::Agent& src_agent,
                                           uint32_t *recommended_ids_mask) {
-  assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
-          (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
-         ("Both devices are CPU agents which is not expected"));
+  // From the collected data, gfx94x performance is better only for first 3 SDMA engines
+  bool isGfx94x = (isa_->GetMajorVersion() == 9 &&
+                  (isa_->GetMinorVersion() == 4 || isa_->GetMinorVersion() == 5));
 
-  *recommended_ids_mask = rec_sdma_eng_id_peers_info_[dst_agent.public_handle().handle];
+  if (isGfx94x &&
+      ((src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+        dst_agent.device_type() == core::Agent::kAmdGpuDevice) ||
+        (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+        dst_agent.device_type() == core::Agent::kAmdCpuDevice))) {
+
+    if (src_agent.device_type() == core::Agent::kAmdCpuDevice) {
+      // Host to Device: Use SDMA engine 0 if available
+      *recommended_ids_mask = HSA_AMD_SDMA_ENGINE_0;
+    } else {
+      // Device to Host: Use SDMA engines 1 and 2 if available
+      *recommended_ids_mask = HSA_AMD_SDMA_ENGINE_1;
+
+      if (properties_.NumSdmaEngines + properties_.NumSdmaXgmiEngines > 2) {
+        *recommended_ids_mask |= HSA_AMD_SDMA_ENGINE_2;
+      }
+    }
+  } else {
+    *recommended_ids_mask = rec_sdma_eng_id_peers_info_[dst_agent.public_handle().handle];
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::DmaCopyFanOut(
+    core::Signal& out_signal,
+    std::vector<core::Signal*>& dep_signals,
+    uint16_t num_entries,
+    const void* const* src_list,
+    void* const* dst_list,
+    const hsa_agent_t* dst_agent_list,
+    const size_t* size_list) {
+
+  SetCopyRequestRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
+
+  if (profiling_enabled())
+    out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
+
+  lazy_ptr<core::Blit>& coord_blit = GetBlitObject(BlitHostToDev);
+  if (!coord_blit->isSDMA())
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  BlitSdmaBase* coordinator = static_cast<BlitSdmaBase*>((*coord_blit).get());
+
+  // Resolve per-entry SDMA engines.
+  constexpr bool kUseRRBalancing = false;
+  const uint32_t total_sdma =
+      properties_.NumSdmaEngines + properties_.NumSdmaXgmiEngines;
+
+  struct EngineSlot { BlitSdmaBase* blit; uint32_t idx; };
+  std::vector<EngineSlot> engines(num_entries, {coordinator, BlitHostToDev});
+
+  if (kUseRRBalancing && total_sdma > 0) {
+    for (uint32_t d = 0; d < num_entries; ++d) {
+      uint32_t eng_idx = BlitHostToDev + (sdma_rr_index_++ % total_sdma);
+      lazy_ptr<core::Blit>& blit = GetBlitObject(eng_idx);
+      if (blit->isSDMA())
+        engines[d] = {static_cast<BlitSdmaBase*>((*blit).get()), eng_idx};
+    }
+  } else {
+    std::set<uint32_t> usedEngines;
+    std::vector<uint32_t> unresolved;
+
+    // Assign recommended engines to entries that have one.
+    for (uint32_t d = 0; d < num_entries; ++d) {
+      core::Agent* dst_agent = core::Agent::Convert(dst_agent_list[d]);
+      int rec_eng = rocr::os::Ffs(
+          rec_sdma_eng_id_peers_info_[dst_agent->public_handle().handle]);
+      if (rec_eng) {
+        lazy_ptr<core::Blit>& blit = GetBlitObject(rec_eng);
+        if (blit->isSDMA()) {
+          engines[d] = {static_cast<BlitSdmaBase*>((*blit).get()),
+                        static_cast<uint32_t>(rec_eng)};
+          usedEngines.insert(static_cast<uint32_t>(rec_eng));
+        }
+      } else {
+        unresolved.push_back(d);
+      }
+    }
+
+    // Assign exclusive engines to remaining entries
+    for (uint32_t d : unresolved) {
+      if (total_sdma == 0) continue;
+      int picked = 0;
+      for (uint32_t e = 0; e < total_sdma; ++e) {
+        uint32_t candidate = BlitHostToDev + e;
+        if (usedEngines.find(candidate) == usedEngines.end()) {
+          picked = candidate;
+          break;
+        }
+      }
+      if (!picked)
+        picked = BlitHostToDev + (d % total_sdma);
+      lazy_ptr<core::Blit>& blit = GetBlitObject(picked);
+      if (blit->isSDMA()) {
+        engines[d] = {static_cast<BlitSdmaBase*>((*blit).get()),
+                      static_cast<uint32_t>(picked)};
+        usedEngines.insert(static_cast<uint32_t>(picked));
+      }
+    }
+  }
+
+  // Allocate prologue synchronization signal
+  core::unique_signal_ptr prologue_signal(new core::DefaultSignal(1));
+  if (!prologue_signal->IsValid()) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  bool use_body_signals = !coordinator->PlatformAtomicSupport();
+
+  // Without platform atomic support, bodies cannot atomically decrement a
+  // shared signal. Allocate per-body signals so each body writes to its own
+  // and the epilogue polls all of them.
+  std::vector<core::unique_signal_ptr> body_signals;
+  if (use_body_signals) {
+    body_signals.reserve(num_entries);
+    for (uint32_t d = 0; d < num_entries; ++d) {
+      core::unique_signal_ptr sig(new core::DefaultSignal(1));
+      if (!sig->IsValid())
+        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+      body_signals.push_back(std::move(sig));
+    }
+  }
+
+  core::Signal* prologue_raw = prologue_signal.get();
+  std::vector<core::Signal*> body_raw;
+  for (auto& s : body_signals) body_raw.push_back(s.get());
+
+  auto cleanup_signals = std::make_unique<std::vector<core::Signal*>>();
+  cleanup_signals->push_back(prologue_signal.release());
+  for (auto& s : body_signals) cleanup_signals->push_back(s.release());
+
+  core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+      core::Signal::Convert(&out_signal),
+      HSA_SIGNAL_CONDITION_EQ, 0,
+      [](hsa_signal_value_t, void* arg) -> bool {
+        auto* sigs = reinterpret_cast<std::vector<core::Signal*>*>(arg);
+        for (auto* s : *sigs) s->DestroySignal();
+        delete sigs;
+        return false;
+      },
+      reinterpret_cast<void*>(cleanup_signals.release()));
+
+  // Since each engine will decrement the out_signal, we need to add the #entries
+  if (!use_body_signals) {
+    out_signal.AddRelaxed(num_entries);
+  }
+
+  // Prologue: dep polls, HDP flush, GCR invalidate, decrement prologue_signal.
+  LogPrint(HSA_AMD_LOG_FLAG_SDMA,
+           "SDMA FanOut Prologue: engine %02u, num_entries=%u, dep_signal=0x%zx, "
+           "completion_signal=0x%zx, prologue_signal=0x%zx",
+           BlitHostToDev, num_entries,
+           dep_signals.empty() ? 0 : core::Signal::Convert(dep_signals[0]).handle,
+           core::Signal::Convert(&out_signal).handle,
+           core::Signal::Convert(prologue_raw).handle);
+  hsa_status_t stat = coordinator->SubmitPrologue(dep_signals, out_signal,
+                                                  *prologue_raw);
+  if (stat != HSA_STATUS_SUCCESS) return stat;
+
+  // Fan out: one copy body per entry on its resolved engine.
+  for (uint32_t d = 0; d < num_entries; ++d) {
+    core::Signal& body_sig = use_body_signals ? *body_raw[d] : out_signal;
+    LogPrint(HSA_AMD_LOG_FLAG_SDMA,
+             "SDMA FanOut Body[%u/%u]: engine %02u, src=%p, dst=%p, size=%zu, "
+             "prologue_signal=0x%zx, body_signal=0x%zx",
+             d + 1, num_entries, engines[d].idx, src_list[d], dst_list[d],
+             size_list[d],
+             core::Signal::Convert(prologue_raw).handle,
+             core::Signal::Convert(&body_sig).handle);
+    stat = engines[d].blit->SubmitLinearCopyBody(
+        dst_list[d], src_list[d], size_list[d],
+        *prologue_raw, body_sig);
+    if (stat != HSA_STATUS_SUCCESS) return stat;
+  }
+
+  // Epilogue: waits for all bodies, GCR writeback, end timestamp, signal → 0.
+  LogPrint(HSA_AMD_LOG_FLAG_SDMA,
+           "SDMA FanOut Epilogue: engine %02u, completion_signal=0x%zx, "
+           "num_body_signals=%zu",
+           BlitHostToDev,
+           core::Signal::Convert(&out_signal).handle,
+           body_raw.size());
+  constexpr hsa_signal_value_t kWaitValue = 1;
+  return coordinator->SubmitEpilogue(out_signal, kWaitValue, body_raw);
+}
+
+hsa_status_t GpuAgent::DmaCopyBroadcast(
+    const hsa_amd_memory_copy_op_t& op,
+    std::vector<core::Signal*>& dep_signals) {
+
+  core::Signal* out_signal_obj = core::Signal::Convert(op.completion_signal);
+  core::Signal& out_signal = *out_signal_obj;
+
+  const uint16_t num_dsts = op.num_dsts;
+  constexpr size_t kBroadcastMaxSize = 1024 * 1024;
+
+  // Try HW broadcast for small transfers.
+  if (op.size < kBroadcastMaxSize) {
+    SetCopyRequestRefCount(true);
+    MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
+
+    lazy_ptr<core::Blit>& blit = GetBlitObject(BlitHostToDev);
+    if (blit->isSDMA()) {
+      BlitSdmaBase* sdma_blit = static_cast<BlitSdmaBase*>((*blit).get());
+      if (sdma_blit->BroadcastSupported()) {
+        if (profiling_enabled())
+          out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
+
+        LogPrint(HSA_AMD_LOG_FLAG_SDMA,
+                 "SDMA Broadcast using engine %02u, src=%p, num_dsts=%u, size=%zu, "
+                 "dep_signal=0x%zx, completion_signal=0x%zx",
+                 BlitHostToDev, op.src, num_dsts, op.size,
+                 dep_signals.empty() ? 0 : core::Signal::Convert(dep_signals[0]).handle,
+                 out_signal_obj->signal_);
+        std::vector<void*> dsts(op.dst_list, op.dst_list + num_dsts);
+        return sdma_blit->SubmitLinearCopyBroadcastCommand(
+            dsts, op.src, op.size, dep_signals, out_signal);
+      }
+    }
+  }
+
+  // Fall back to fan-out: expand broadcast into per-entry arrays.
+  std::vector<const void*> srcs(num_dsts, op.src);
+  std::vector<size_t> sizes(num_dsts, op.size);
+
+  return DmaCopyFanOut(out_signal, dep_signals, num_dsts,
+                       srcs.data(), op.dst_list, op.dst_agent_list,
+                       sizes.data());
+}
+
+hsa_status_t GpuAgent::DmaCopyMulti(
+    const hsa_amd_memory_copy_op_t& op,
+    std::vector<core::Signal*>& dep_signals) {
+
+  core::Signal* out_signal_obj = core::Signal::Convert(op.completion_signal);
+  core::Signal& out_signal = *out_signal_obj;
+
+  return DmaCopyFanOut(out_signal, dep_signals, op.num_dsts,
+                       const_cast<const void* const*>(op.src_list),
+                       op.dst_list, op.dst_agent_list,
+                       op.size_list);
+}
+
+hsa_status_t GpuAgent::DmaCopyBatch(const hsa_amd_memory_copy_op_t* ops,
+                                    uint32_t num_ops,
+                                    std::vector<core::Signal*>& dep_signals) {
+  if (num_ops == 0) {
+    return HSA_STATUS_SUCCESS;
+  }
+
+  for (uint32_t i = 0; i < num_ops; ++i) {
+    const auto& op = ops[i];
+    core::Signal* out_signal_obj = core::Signal::Convert(op.completion_signal);
+    core::Signal& out_signal = *out_signal_obj;
+
+    hsa_status_t status;
+
+    switch (op.type) {
+    case HSA_AMD_MEMORY_COPY_OP_LINEAR: {
+      if (op.num_dsts > 0) {
+        status = DmaCopyMulti(op, dep_signals);
+      } else {
+        core::Agent* dst_agent = core::Agent::Convert(op.dst_agent);
+        core::Agent* src_agent = core::Agent::Convert(op.src_agent);
+        uint32_t engine_offset =
+            rocr::os::Ffs(rec_sdma_eng_id_peers_info_[dst_agent->public_handle().handle]);
+        if (!engine_offset) {
+          bool is_h2d = (src_agent->device_type() == core::Agent::kAmdCpuDevice &&
+                         dst_agent->device_type() == core::Agent::kAmdGpuDevice);
+          engine_offset = is_h2d ? BlitHostToDev : BlitDevToHost;
+        }
+        status = DmaCopyOnEngine(op.dst, *dst_agent, op.src, *src_agent, op.size,
+                                 dep_signals, out_signal, engine_offset, true);
+      }
+      break;
+    }
+    case HSA_AMD_MEMORY_COPY_OP_LINEAR_BROADCAST:
+      status = DmaCopyBroadcast(op, dep_signals);
+      break;
+    case HSA_AMD_MEMORY_COPY_OP_LINEAR_SWAP:
+    case HSA_AMD_MEMORY_COPY_OP_LINEAR_INDIRECT_SRC:
+    case HSA_AMD_MEMORY_COPY_OP_LINEAR_INDIRECT_DST:
+    case HSA_AMD_MEMORY_COPY_OP_LINEAR_INDIRECT_SRCDST:
+      // Future implementation
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    default:
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (status != HSA_STATUS_SUCCESS)
+      return status;
+  }
 
   return HSA_STATUS_SUCCESS;
 }
@@ -1447,8 +1803,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         setFlag(HSA_EXTENSION_AMD_PC_SAMPLING);
       }
 
-      if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
-        os::CloseLib(lib);
+      if (core::Runtime::runtime_singleton_->AqlProfileAvailable()) {
         setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
       }
 
@@ -1608,7 +1963,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       if (status != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-      for (auto r : regions()) availableBytes += ((AMD::MemoryRegion*)r)->GetCacheSize();
+      for (const auto& r : regions()) availableBytes += ((AMD::MemoryRegion*)(r.get()))->GetCacheSize();
 
       availableBytes += scratch_cache_.free_bytes() - scratch_cache_.reserved_bytes();
 
@@ -1676,6 +2031,27 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       }
       return HSA_STATUS_ERROR;
     }
+    case HSA_AMD_AGENT_INFO_PM4_EMULATION:
+      *((bool*)value) = properties_.Capability2.ui32.AqlEmulationPm4_;
+      break;
+    case HSA_AMD_AGENT_INFO_LUID:
+      static_cast<hsa_luid_t*>(value)->low = properties_.LuidLowPart;
+      static_cast<hsa_luid_t*>(value)->high = properties_.LuidHighPart;
+      break;
+    case HSA_AMD_AGENT_INFO_HAS_EXPERT_SCHED_MODE: {
+      // Requires KFD version >= 1.20 AND GFX major version >= 12
+      auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+      *((bool*)value) = (kfd_version.KernelInterfaceMajorVersion > 1 ||
+                         (kfd_version.KernelInterfaceMajorVersion == 1 &&
+                          kfd_version.KernelInterfaceMinorVersion >= 20)) &&
+                        properties_.EngineId.ui32.Major >= 12;
+      break;
+    }
+    case HSA_AMD_AGENT_INFO_CUID: {
+      uint8_t* cuid = static_cast<uint8_t*>(value);
+      memcpy(cuid, derived_cuid_, sizeof(derived_cuid_));
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -1689,7 +2065,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type, u
                                    core::Queue** queue) {
   // Handle GWS queues.
   if (queue_type == HSA_QUEUE_TYPE_COOPERATIVE) {
-    ScopedAcquire<KernelMutex> lock(&gws_queue_.lock_);
+    std::lock_guard<std::mutex> lock(gws_queue_.lock_);
     auto ret = (*gws_queue_.queue_).get();
     if (ret != nullptr) {
       gws_queue_.ref_ct_++;
@@ -1738,14 +2114,21 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type, u
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
   scratch.main_size = scratch.main_size_per_thread * properties_.MaxSlotsScratchCU *
       scratch.main_lanes_per_wave * num_cu;
+  scratch.main_size =
+      (core::Runtime::runtime_singleton_->flag().enable_scratch()) ? scratch.main_size : 0;
   scratch.main_queue_base = nullptr;
   scratch.main_queue_process_offset = 0;
 
-  MAKE_NAMED_SCOPE_GUARD(scratchGuard, [&]() { ReleaseQueueMainScratch(scratch); });
+  MAKE_NAMED_SCOPE_GUARD(scratchGuard, [&]() {
+    if (scratch.main_queue_base != nullptr) ReleaseQueueMainScratch(scratch);
+  });
 
   if (scratch.main_size != 0) {
     AcquireQueueMainScratch(scratch);
     if (scratch.main_queue_base == nullptr) {
+      LogPrint(HSA_AMD_LOG_FLAG_INFO,
+               "Failed to allocate scratch memory for queue, size=%zu, node=%u",
+               scratch.main_size, node_id());
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
@@ -1761,20 +2144,28 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type, u
   core::SharedQueue* shared_queue = nullptr;
 
   if (dev_mem_queue_descriptor) {
-    shared_queue = static_cast<core::SharedQueue*>(
-        finegrain_allocator()(sizeof(core::SharedQueue), core::MemoryRegion::AllocateUncached));
+    shared_queue = static_cast<core::SharedQueue*>(finegrain_allocator()(
+        sizeof(core::SharedQueue),
+        core::MemoryRegion::AllocateUncached | MemoryRegion::AllocateQueueObject));
   } else {
     shared_queue =
         static_cast<core::SharedQueue*>(core::Runtime::runtime_singleton_->system_allocator()(
             sizeof(core::SharedQueue), MemoryRegion::GetPageSize(),
-            isMES() ? (MemoryRegion::AllocateGTTAccess | MemoryRegion::AllocateNonPaged) : 0,
+            isMES() ? (MemoryRegion::AllocateGTTAccess | MemoryRegion::AllocateNonPaged |
+                       MemoryRegion::AllocateQueueObject)
+                    : MemoryRegion::AllocateQueueObject,
             node_id()));
   }
 
-  if (!shared_queue) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  if (!shared_queue) {
+    LogPrint(HSA_AMD_LOG_FLAG_INFO,
+             "Failed to allocate shared queue descriptor memory, node=%u", node_id());
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
 
   auto aql_queue = new AqlQueue(shared_queue, this, size, node_id(), scratch, event_callback, data,
                                 flags);
+
   *queue = aql_queue;
   aql_queues_.push_back(aql_queue);
 
@@ -1830,7 +2221,7 @@ void GpuAgent::AcquireQueueMainScratch(ScratchInfo& scratch) {
   */
   bool large;
 
-  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  std::lock_guard<std::mutex> lock(scratch_lock_);
   const size_t small_limit = scratch_pool_.size() >> 3;
   bool use_reclaim = true;
 
@@ -1989,7 +2380,7 @@ void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
   uint64_t size_per_wave = AlignUp(scratch.alt_size_per_thread * properties_.WaveFrontSize, 1024);
   if (size_per_wave > MAX_WAVE_SCRATCH) return;
 
-  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  std::lock_guard<std::mutex> lock(scratch_lock_);
 
   // Ensure mapping will be in whole pages.
   scratch.alt_size = AlignUp(scratch.alt_size, 4096);
@@ -2130,7 +2521,7 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
   // Limit errors due to relative frequency drift to ~0.5us.  Sync clocks at 16Hz.
   const int64_t max_extrapolation = core::Runtime::runtime_singleton_->sys_clock_freq() >> 4;
 
-  ScopedAcquire<KernelMutex> lock(&t1_lock_);
+  std::lock_guard<std::mutex> lock(t1_lock_);
   // Limit errors due to correlated pair certainty to ~0.5us.
   // extrapolated time < (0.5us / half clock read certainty) * delay between clock measures
   // clock read certainty is <4us.
@@ -2352,7 +2743,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
   uint32_t xgmi_engine_cnt = properties_.NumSdmaXgmiEngines;
   assert((xgmi_engine_cnt > 0) && ("Illegal condition, should not happen"));
 
-  ScopedAcquire<KernelMutex> lock(&xgmi_peer_list_lock_);
+  std::lock_guard<std::mutex> lock(xgmi_peer_list_lock_);
 
   for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
     uint64_t dst_handle = dst_agent.public_handle().handle;
@@ -2444,19 +2835,20 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
 void GpuAgent::Trim() {
   Agent::Trim();
   AsyncReclaimScratchQueues();
-  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  std::lock_guard<std::mutex> lock(scratch_lock_);
   scratch_cache_.trim(false);
 }
 
 void GpuAgent::InitAllocators() {
-  for (auto pool : GetNearestCpuAgent()->regions()) {
+  for (const auto& pool : GetNearestCpuAgent()->regions()) {
     if (pool->kernarg()) {
-      system_allocator_ = [pool](size_t size, size_t alignment,
+      const core::MemoryRegion* pool_ptr = pool.get();
+      system_allocator_ = [pool_ptr](size_t size, size_t alignment,
                                  MemoryRegion::AllocateFlags alloc_flags) -> void* {
         assert(alignment <= 4096);
         void* ptr = nullptr;
         return (HSA_STATUS_SUCCESS ==
-                core::Runtime::runtime_singleton_->AllocateMemory(pool, size, alloc_flags, &ptr))
+                core::Runtime::runtime_singleton_->AllocateMemory(pool_ptr, size, alloc_flags, &ptr))
             ? ptr
             : nullptr;
       };
@@ -2467,14 +2859,14 @@ void GpuAgent::InitAllocators() {
   assert(system_allocator_ && "Nearest NUMA node did not have a kernarg pool.");
 
   // Setup this GPU's fine-grain and coarse-grain allocators.
-  for (auto region : regions()) {
-    const AMD::MemoryRegion* amd_region = static_cast<const AMD::MemoryRegion*>(region);
+  for (const auto& region : regions()) {
+    const AMD::MemoryRegion* amd_region = static_cast<const AMD::MemoryRegion*>(region.get());
 
-    auto region_allocator = [region](size_t size,
+    auto region_allocator = [amd_region](size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags) -> void* {
       void* ptr = nullptr;
        return (HSA_STATUS_SUCCESS ==
-               core::Runtime::runtime_singleton_->AllocateMemory(region, size, alloc_flags, &ptr))
+               core::Runtime::runtime_singleton_->AllocateMemory(amd_region, size, alloc_flags, &ptr))
            ? ptr
            : nullptr;
     };
@@ -2553,14 +2945,14 @@ hsa_status_t GpuAgent::PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configura
     return HSA_STATUS_ERROR;
 
   // First query to get size of list needed
-  hsa_status_t ret = driver().PcSamplingQueryCapabilities(node_id(), NULL, 0, &size);
-  if (ret != HSA_STATUS_SUCCESS || size == 0) return ret;
+  HSAKMT_STATUS ret = HSAKMT_CALL(hsaKmtPcSamplingQueryCapabilities(node_id(), NULL, 0, &size));
+  if (ret != HSAKMT_STATUS_SUCCESS || size == 0) return HSA_STATUS_ERROR;
 
   std::vector<HsaPcSamplingInfo> sampleInfoList(size);
-  ret = driver().PcSamplingQueryCapabilities(node_id(), sampleInfoList.data(),
-                                             sampleInfoList.size(), &size);
+  ret = HSAKMT_CALL(hsaKmtPcSamplingQueryCapabilities(node_id(), sampleInfoList.data(), sampleInfoList.size(),
+                                          &size));
 
-  if (ret != HSA_STATUS_SUCCESS) return ret;
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
 
   for (uint32_t i = 0; i < size; i++) {
     hsa_ven_amd_pcs_configuration_t hsaPcSampling;
@@ -2586,9 +2978,10 @@ hsa_status_t GpuAgent::PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& sess
 
   // Pass the sampling information to the kernel driver to create PC
   // sampling session.
-  ret = driver().PcSamplingCreate(node_id(), &sampleInfo, &thunkId);
-  if (ret != HSA_STATUS_SUCCESS) {
-    return ret;
+  HSAKMT_STATUS retkmt = HSAKMT_CALL(hsaKmtPcSamplingCreate(node_id(), &sampleInfo, &thunkId));
+  if (retkmt != HSAKMT_STATUS_SUCCESS) {
+    return (retkmt == HSAKMT_STATUS_KERNEL_ALREADY_OPENED) ? (hsa_status_t)HSA_STATUS_ERROR_RESOURCE_BUSY
+            : HSA_STATUS_ERROR;
   }
 
   debug_print("Created PC sampling session with thunkId:%d\n", thunkId);
@@ -2794,7 +3187,7 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
 hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) {
   if (PcSamplingStop(session) != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
 
-  hsa_status_t ret = driver().PcSamplingDestroy(node_id(), session.ThunkId());
+  HSAKMT_STATUS retKmt = HSAKMT_CALL(hsaKmtPcSamplingDestroy(node_id(), session.ThunkId()));
   hsa_ven_amd_pcs_method_kind_t sampling_method = session.method();
 
   pcs_data_t* pcs_data = nullptr;
@@ -2826,7 +3219,7 @@ hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& ses
   // Update the trap handler to clear any associated device data
   UpdateTrapHandlerWithPCS(nullptr, nullptr);
 
-  return ret;
+  return (retKmt == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
 }
 
 hsa_status_t GpuAgent::PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) {
@@ -2893,9 +3286,8 @@ hsa_status_t GpuAgent::PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& sessi
   }
 
   // Start the sampling session in the kernel driver
-  if (driver().PcSamplingStart(node_id(), session.ThunkId()) == HSA_STATUS_SUCCESS) {
+  if (HSAKMT_CALL(hsaKmtPcSamplingStart(node_id(), session.ThunkId())) == HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_SUCCESS;
-  }
 
   debug_print("Failed to start PC sampling session with thunkId:%d\n", session.ThunkId());
   // Clean up if starting the session failed
@@ -2915,8 +3307,8 @@ hsa_status_t GpuAgent::PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& sessio
   session.stop();
 
   // Stop PC sampling in the kernel driver
-  hsa_status_t ret = driver().PcSamplingStop(node_id(), session.ThunkId());
-  if (ret != HSA_STATUS_SUCCESS)
+  HSAKMT_STATUS retKmt = HSAKMT_CALL(hsaKmtPcSamplingStop(node_id(), session.ThunkId()));
+  if (retKmt != HSAKMT_STATUS_SUCCESS)
     throw AMD::hsa_exception(HSA_STATUS_ERROR, "Failed to stop PC Sampling session.");
 
   // Determine the sampling method and corresponding data
@@ -3461,6 +3853,18 @@ hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& sessi
     }
   }
   return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::AcquireCountedQueue(hsa_queue_type_t type,
+                                           HSA::hsa_amd_queue_priority_internal_t priority,
+                                           void (*callback)(hsa_status_t, hsa_queue_t*, void*),
+                                           void* data, uint64_t flags,
+                                           hsa_queue_t** out_queue) {
+  return queue_pool_.AcquireQueue(type, priority, callback, data, flags, out_queue);
+}
+
+hsa_status_t GpuAgent::ReleaseCountedQueue(hsa_queue_t* queue) {
+  return queue_pool_.ReleaseQueue(queue);
 }
 
 }  // namespace amd

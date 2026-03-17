@@ -163,6 +163,13 @@ hsa_status_t
 
 // Mirrors Amd Extension Apis
 hsa_status_t
+    hsa_amd_memory_async_batch_copy(const hsa_amd_memory_copy_op_t* copy_ops,
+                              uint32_t num_copy_ops,
+                              uint32_t num_dep_signals,
+                              const hsa_signal_t* dep_signals);
+
+// Mirrors Amd Extension Apis
+hsa_status_t
     hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent, hsa_agent_t src_agent,
                                       uint32_t *engine_ids_mask);
 
@@ -219,7 +226,7 @@ hsa_status_t
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
                                         hsa_agent_t* agents,
-                                        int interop_handle,
+                                        hsa_handle_t interop_handle,
                                         uint32_t flags,
                                         size_t* size,
                                         void** ptr,
@@ -370,6 +377,25 @@ hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, si
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_queue_get_info(hsa_queue_t* queue, hsa_queue_info_attribute_t attribute,
                                     void* value);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_ais_file_write(hsa_amd_ais_file_handle_t handle, void *devicePtr,
+                                            uint64_t size, int64_t file_offset,
+                                            uint64_t *size_copied, int32_t *status);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_ais_file_read(hsa_amd_ais_file_handle_t handle, void *devicePtr,
+                                           uint64_t size, int64_t file_offset,
+                                           uint64_t *size_copied, int32_t *status);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_counted_queue_acquire(hsa_agent_t agent, hsa_queue_type_t type,
+                                           hsa_amd_queue_priority_t priority,
+                                           void (*callback)(hsa_status_t status,
+                                                            hsa_queue_t* source, void* data),
+                                           void* data, uint64_t flags, hsa_queue_t** queue);
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_counted_queue_release(hsa_queue_t* queue);
 
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_enable_logging(uint8_t* flags, void* file);
