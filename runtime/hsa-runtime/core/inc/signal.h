@@ -89,7 +89,7 @@ namespace timer {
 inline timer::fast_clock::duration GetFastTimeout(uint64_t timeout) {
   uint64_t hsa_freq = 0;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
-  return timer::duration_from_seconds<timer::fast_clock::duration>(
+  return (hsa_freq == 0) ? timer::duration_from_seconds<timer::fast_clock::duration>(0)  : timer::duration_from_seconds<timer::fast_clock::duration>(
       double(timeout) / double(hsa_freq));
 }
 
