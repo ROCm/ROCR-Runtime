@@ -1302,27 +1302,39 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	HSAuint32 page_offset = (HSAuint64)address & (PAGE_SIZE-1);
 	HSAuint64 aligned_addr = (HSAuint64)address - page_offset;
 	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
+	uint32_t num_gpus = all_gpu_id_array_size / sizeof(uint32_t);
+	uint32_t i;
 	HSAKMT_STATUS ret;
 
 	if (!g_first_gpu_mem)
 		return HSAKMT_STATUS_ERROR;
 
-	s_attr = 2 * sizeof(struct kfd_ioctl_svm_attribute);
+	/* Re-grant ACCESS_IN_PLACE on all GPUs along with the coherency flags.
+	 * A prior deregister leaves NO_ACCESS on the range, and allocators like
+	 * jemalloc reuse the VA without munmap so that sticks in the kernel. If we
+	 * don't clear it here the GPU faults on the re-registered buffer. Must be
+	 * ACCESS_IN_PLACE, not ACCESS: userptr memory can't migrate, so ACCESS
+	 * would fail the restore path and still fault.
+	 */
+	s_attr = (num_gpus + 2) * sizeof(struct kfd_ioctl_svm_attribute);
 	args = alloca(sizeof(*args) + s_attr);
 	args->start_addr = aligned_addr;
 	args->size = aligned_size;
 	args->op = KFD_IOCTL_SVM_OP_SET_ATTR;
-	args->nattr = 2;
-	args->attrs[0].type = coarse_grain ?
+	args->nattr = num_gpus + 2;
+	for (i = 0; i < num_gpus; i++) {
+		args->attrs[i].type = HSA_SVM_ATTR_ACCESS_IN_PLACE;
+		args->attrs[i].value = all_gpu_id_array[i];
+	}
+	args->attrs[num_gpus].type = coarse_grain ?
 			      HSA_SVM_ATTR_CLR_FLAGS : HSA_SVM_ATTR_SET_FLAGS;
-	args->attrs[0].value = HSA_SVM_FLAG_COHERENT;
-	args->attrs[1].type = ext_coherent ? HSA_SVM_ATTR_SET_FLAGS : HSA_SVM_ATTR_CLR_FLAGS ;
-	args->attrs[1].value = HSA_SVM_FLAG_EXT_COHERENT;
-	/* Validate and reserve the tracking entry before touching kernel state,
-	 * so a same-base re-registration with a mismatched size is rejected
-	 * (INVALID_PARAMETER) without issuing a stray SET_ATTR - deregister is
-	 * keyed only by base address and could not disambiguate the two extents.
-	 * Identical (base, size) registrations are refcounted.
+	args->attrs[num_gpus].value = HSA_SVM_FLAG_COHERENT;
+	args->attrs[num_gpus + 1].type = ext_coherent ? HSA_SVM_ATTR_SET_FLAGS : HSA_SVM_ATTR_CLR_FLAGS ;
+	args->attrs[num_gpus + 1].value = HSA_SVM_FLAG_EXT_COHERENT;
+	/* Reserve the tracking entry before touching kernel state. Same-base
+	 * registrations with differing spans are refcounted and grow the tracked
+	 * extent to the largest span; deregister revokes it once the last owner
+	 * is gone.
 	 */
 	ret = svm_api_range_get((void *)aligned_addr, aligned_size);
 	if (ret != HSAKMT_STATUS_SUCCESS)
