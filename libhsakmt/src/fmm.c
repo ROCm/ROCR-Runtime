@@ -243,12 +243,22 @@ typedef struct {
  * base and size here, refcounted to mirror the registration_count handling of
  * regular userptr vm_objects, so that deregistration can issue the inverse SVM
  * SET_ATTR (NO_ACCESS + clear coherency flags) instead of being a silent no-op.
+ *
+ * Keyed by the exact user pointer, not by the page-aligned base. Distinct
+ * sub-page buffers routinely share a page-aligned base and round to different
+ * spans, and register/deregister both carry the user pointer, so it is the only
+ * key that identifies one registration. Keying by base instead conflates those
+ * registrations and forces one shared extent, which then has to cover the
+ * largest of them - so deregistering a small buffer revokes GPU access across a
+ * span it never owned.
  */
 struct svm_api_range {
-	void *start;			/* page-aligned base address */
-	uint64_t size;			/* page-aligned size */
-	uint32_t refcount;		/* number of outstanding registrations */
-	rbtree_node_t node;		/* svm_api_range_tree, key addr only (size field 0) */
+	void *start;			/* page-aligned base, rounded out */
+	uint64_t size;			/* page-aligned size, rounded out */
+	void *revoke_start;		/* pages this registration owns outright */
+	uint64_t revoke_size;		/* 0 if it fills no whole page */
+	uint32_t refcount;		/* registrations of this same user pointer */
+	rbtree_node_t node;		/* svm_api_range_tree, key user VA (size field 0) */
 };
 typedef struct svm_api_range svm_api_range_t;
 
@@ -274,10 +284,13 @@ static svm_t svm = {
 };
 
 /* RB tree of host ranges registered via the SVM API (see svm_api_range).
- * Protected by svm_api_mutex. Keys use aligned VA only (LKP_ADDR).
+ * Protected by svm_api_mutex. Keys use the user VA only (LKP_ADDR).
+ * svm_api_max_extent is the largest tracked extent, used to bound the leftward
+ * scan for registrations that overlap a range being revoked.
  */
 rbtree_t svm_api_range_tree;
 pthread_mutex_t svm_api_mutex;
+uint64_t svm_api_max_extent;
 
 /* On APU, for memory allocated on the system memory that GPU doesn't access
  * via GPU driver, they are not managed by GPUVM. cpuvm_aperture keeps track
@@ -1074,11 +1087,12 @@ static HsaMemFlags fmm_translate_ioc_to_hsa_flags(uint32_t ioc_flags)
 /*
  * SVM-API range tracking helpers. These mirror the registration_count handling
  * of regular userptr vm_objects so that SVM-API registrations can be torn down
- * symmetrically on deregistration. svm_api_mutex must be held by the caller.
+ * symmetrically on deregistration. `svm_api_range_get/put` manage svm_api_mutex
+ * internally; callers must hold the mutex only when calling svm_api_range_find.
  */
-static svm_api_range_t *svm_api_range_find(void *aligned_addr)
+static svm_api_range_t *svm_api_range_find(void *user_addr)
 {
-	rbtree_key_t key = rbtree_key((unsigned long)aligned_addr, 0);
+	rbtree_key_t key = rbtree_key((unsigned long)user_addr, 0);
 	rbtree_node_t *n = rbtree_lookup(&svm_api_range_tree, &key, LKP_ADDR);
 
 	if (!n)
@@ -1087,38 +1101,42 @@ static svm_api_range_t *svm_api_range_find(void *aligned_addr)
 }
 
 /*
- * Add a new SVM-API range, or refcount an existing one sharing the page-aligned
- * base.
+ * Track one SVM-API registration of @user_addr covering the page-rounded range
+ * [@aligned_addr, @aligned_addr + @aligned_size).
  *
- * Several distinct registrations can share a page-aligned base - small buffers
- * packed into one page, one of which may straddle into the next page and so
- * round to a larger span. They are refcounted together on that base and the
- * tracked extent grows to the largest span seen, so deregister revokes the full
- * extent once the last owner is dropped. The exact sub-range to revoke is then
- * computed by interval subtraction in svm_api_range_put (which subtracts the
- * coverage of any surviving registration, at this base or a neighbouring one).
+ * Each registration keeps its own extent, so buffers that merely share a page
+ * no longer share a revoke extent. Repeat registrations of the same pointer are
+ * refcounted, and only there can the extent grow to the largest span seen - an
+ * allocator cannot hand out the same address twice while the first registration
+ * is still live, so in practice that is the same buffer being re-registered.
+ * Sub-ranges still owned by another registration are preserved by the interval
+ * subtraction in svm_api_range_put.
  */
-static HSAKMT_STATUS svm_api_range_get(void *aligned_addr, uint64_t aligned_size)
+static void svm_api_range_get(void *user_addr, void *aligned_addr,
+			      uint64_t aligned_size, uint64_t user_size)
 {
 	svm_api_range_t *r;
+	/* Register rounds out to map whole pages, revoke rounds in. The bytes
+	 * past either end belong to whatever else shares those pages.
+	 */
+	HSAuint64 in_start = PAGE_ALIGN_UP((HSAuint64)user_addr);
+	HSAuint64 in_end = ((HSAuint64)user_addr + user_size) & ~(HSAuint64)(PAGE_SIZE - 1);
+	HSAuint64 in_size = in_end > in_start ? in_end - in_start : 0;
 
 	pthread_mutex_lock(&svm_api_mutex);
-	r = svm_api_range_find(aligned_addr);
+	r = svm_api_range_find(user_addr);
 	if (r) {
-		/* Distinct sub-page buffers can share a page-aligned base with
-		 * different page-aligned spans (e.g. small calloc'd buffers
-		 * packed into one page, one of which straddles into the next
-		 * page). They are independent registrations, so refcount them
-		 * together and grow the tracked extent to the largest span seen
-		 * at this base; deregister then revokes the full extent once the
-		 * last owner is gone, and overlap with other bases is resolved by
-		 * the interval subtraction in svm_api_range_put.
-		 */
 		++r->refcount;
 		if (aligned_size > r->size)
 			r->size = aligned_size;
+		if (in_size > r->revoke_size) {
+			r->revoke_start = (void *)in_start;
+			r->revoke_size = in_size;
+		}
+		if (r->size > svm_api_max_extent)
+			svm_api_max_extent = r->size;
 		pthread_mutex_unlock(&svm_api_mutex);
-		return HSAKMT_STATUS_SUCCESS;
+		return;
 	}
 
 	r = calloc(1, sizeof(*r));
@@ -1127,17 +1145,20 @@ static HSAKMT_STATUS svm_api_range_get(void *aligned_addr, uint64_t aligned_size
 		 * falls back to the previous no-op behavior for this range.
 		 */
 		pr_warn("Failed to track SVM-API range %p, deregister will be a no-op\n",
-			aligned_addr);
+			user_addr);
 		pthread_mutex_unlock(&svm_api_mutex);
-		return HSAKMT_STATUS_SUCCESS;
+		return;
 	}
 	r->start = aligned_addr;
 	r->size = aligned_size;
+	r->revoke_start = (void *)in_start;
+	r->revoke_size = in_size;
 	r->refcount = 1;
-	r->node.key = rbtree_key((unsigned long)aligned_addr, 0);
+	r->node.key = rbtree_key((unsigned long)user_addr, 0);
 	hsakmt_rbtree_insert(&svm_api_range_tree, &r->node);
+	if (aligned_size > svm_api_max_extent)
+		svm_api_max_extent = aligned_size;
 	pthread_mutex_unlock(&svm_api_mutex);
-	return HSAKMT_STATUS_SUCCESS;
 }
 
 /* A page range whose GPU access must be revoked on deregister. */
@@ -1169,10 +1190,10 @@ static bool svm_revoke_add(struct svm_revoke_range **arr, int *n, int *cap,
 }
 
 /*
- * Drop a reference on the SVM-API registration based at @addr. If this was the
- * last reference, remove it and compute which sub-ranges of [base, base+size)
- * no *other* surviving registration still covers - those are the only ranges
- * whose GPU access must be revoked. Overlapping or page-rounded-neighbor
+ * Drop a reference on the SVM-API registration of @addr. If this was the last
+ * reference, remove it and compute which sub-ranges of [base, base+size) no
+ * *other* surviving registration still covers - those are the only ranges whose
+ * GPU access must be revoked. Overlapping or page-rounded-neighbor
  * registrations keep coverage of the parts they still own, so a shared region
  * survives until its last owner is dropped.
  *
@@ -1182,11 +1203,9 @@ static bool svm_revoke_add(struct svm_revoke_range **arr, int *n, int *cap,
  */
 static int svm_api_range_put(void *addr, struct svm_revoke_range **out)
 {
-	HSAuint64 page_offset = (HSAuint64)addr & (PAGE_SIZE - 1);
-	void *aligned_addr = (void *)((HSAuint64)addr - page_offset);
 	struct svm_revoke_range *ranges = NULL;
 	int n = 0, cap = 0;
-	HSAuint64 base, end, cur;
+	HSAuint64 base, end, cur, scan;
 	rbtree_key_t key;
 	rbtree_node_t *node;
 	svm_api_range_t *r;
@@ -1194,26 +1213,35 @@ static int svm_api_range_put(void *addr, struct svm_revoke_range **out)
 	*out = NULL;
 
 	pthread_mutex_lock(&svm_api_mutex);
-	r = svm_api_range_find(aligned_addr);
+	r = svm_api_range_find(addr);
 	if (!r || --r->refcount > 0) {
 		pthread_mutex_unlock(&svm_api_mutex);
 		return 0;
 	}
 
-	base = (HSAuint64)r->start;
-	end = base + r->size;
+	base = (HSAuint64)r->revoke_start;
+	end = base + r->revoke_size;
 	hsakmt_rbtree_delete(&svm_api_range_tree, &r->node);
 	free(r);
 
+	/* Fills no whole page, so nothing here is ours alone. */
+	if (end <= base) {
+		pthread_mutex_unlock(&svm_api_mutex);
+		return 0;
+	}
+
 	/* Emit the gaps in [base, end) not covered by any surviving registration.
-	 * Walk the tree in address order starting from the nearest range at or
-	 * before base (it may extend into us), else from the smallest.
+	 *
+	 * Any registration that can reach into [base, end) must start after
+	 * base - svm_api_max_extent, so the sweep starts at the first range from
+	 * there on. Starting at the immediate predecessor of base is not enough:
+	 * a longer range further left still covers base, and skipping it revokes
+	 * GPU access to memory that registration still owns.
 	 */
 	cur = base;
-	key = rbtree_key(base, 0);
-	node = rbtree_lookup_nearest(&svm_api_range_tree, &key, LKP_ADDR, LEFT);
-	if (!node)
-		node = rbtree_min_max(&svm_api_range_tree, LEFT);
+	scan = base > svm_api_max_extent ? base - svm_api_max_extent : 0;
+	key = rbtree_key(scan, 0);
+	node = rbtree_lookup_nearest(&svm_api_range_tree, &key, LKP_ADDR, RIGHT);
 
 	while (node && cur < end) {
 		svm_api_range_t *o = rb_entry(node, svm_api_range_t, node);
@@ -1239,6 +1267,13 @@ static int svm_api_range_put(void *addr, struct svm_revoke_range **out)
 	if (cur < end)				/* uncovered tail */
 		svm_revoke_add(&ranges, &n, &cap, cur, end);
 
+	/* svm_api_max_extent only ever grows, which just widens the scan above.
+	 * Reset it once nothing is tracked so a single large registration does
+	 * not keep widening every later scan for the life of the process.
+	 */
+	if (svm_api_range_tree.root == &svm_api_range_tree.sentinel)
+		svm_api_max_extent = 0;
+
 	pthread_mutex_unlock(&svm_api_mutex);
 	*out = ranges;
 	return n;
@@ -1258,10 +1293,15 @@ static HSAKMT_STATUS fmm_unregister_mem_svm_api(void *aligned_addr,
 	size_t s_attr;
 	uint32_t nattr, i;
 
-	/* One NO_ACCESS attribute per GPU plus two CLR_FLAGS attributes.
-	 * NO_ACCESS on a GPU that never had access is harmless.
+	if (!g_first_gpu_mem)
+		return HSAKMT_STATUS_ERROR;
+
+	/* NO_ACCESS only. The coherency flags are page granular and COHERENT is
+	 * the kernel default, so clearing them drops whatever else shares those
+	 * pages below default; on gfx942/950 that also turns a live mapping
+	 * cached. NO_ACCESS is what the unmap and eviction skip key off.
 	 */
-	nattr = num_gpus + 2;
+	nattr = num_gpus;
 	s_attr = nattr * sizeof(struct kfd_ioctl_svm_attribute);
 	args = alloca(sizeof(*args) + s_attr);
 	args->start_addr = (HSAuint64)aligned_addr;
@@ -1272,10 +1312,6 @@ static HSAKMT_STATUS fmm_unregister_mem_svm_api(void *aligned_addr,
 		args->attrs[i].type = HSA_SVM_ATTR_NO_ACCESS;
 		args->attrs[i].value = all_gpu_id_array[i];
 	}
-	args->attrs[num_gpus].type = HSA_SVM_ATTR_CLR_FLAGS;
-	args->attrs[num_gpus].value = HSA_SVM_FLAG_COHERENT;
-	args->attrs[num_gpus + 1].type = HSA_SVM_ATTR_CLR_FLAGS;
-	args->attrs[num_gpus + 1].value = HSA_SVM_FLAG_EXT_COHERENT;
 
 	pr_debug("Deregistering from SVM %p size: %" PRIu64 "\n", aligned_addr,
 		 aligned_size);
@@ -1304,7 +1340,6 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
 	uint32_t num_gpus = all_gpu_id_array_size / sizeof(uint32_t);
 	uint32_t i;
-	HSAKMT_STATUS ret;
 
 	if (!g_first_gpu_mem)
 		return HSAKMT_STATUS_ERROR;
@@ -1331,30 +1366,19 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	args->attrs[num_gpus].value = HSA_SVM_FLAG_COHERENT;
 	args->attrs[num_gpus + 1].type = ext_coherent ? HSA_SVM_ATTR_SET_FLAGS : HSA_SVM_ATTR_CLR_FLAGS ;
 	args->attrs[num_gpus + 1].value = HSA_SVM_FLAG_EXT_COHERENT;
-	/* Reserve the tracking entry before touching kernel state. Same-base
-	 * registrations with differing spans are refcounted and grow the tracked
-	 * extent to the largest span; deregister revokes it once the last owner
-	 * is gone.
-	 */
-	ret = svm_api_range_get((void *)aligned_addr, aligned_size);
-	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
 
 	pr_debug("Registering to SVM %p size: %" PRIu64 "\n", (void*)aligned_addr,
 		 aligned_size);
 	/* Driver does one copy_from_user, with extra attrs size */
 	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
-		struct svm_revoke_range *rr = NULL;
-
 		pr_debug("op set range attrs failed %s\n", strerror(errno));
-		/* The kernel never got the attributes; drop the reference we
-		 * reserved above. No GPU access was granted, so any revoke
-		 * ranges it computes are moot - just free them.
-		 */
-		svm_api_range_put(address, &rr);
-		free(rr);
 		return HSAKMT_STATUS_ERROR;
 	}
+
+	/* Track only once the kernel has the attributes, so a failed register
+	 * leaves nothing behind and there is no reserved extent to roll back.
+	 */
+	svm_api_range_get(address, (void *)aligned_addr, aligned_size, size);
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -3240,6 +3264,7 @@ void hsakmt_fmm_destroy_process_apertures(void)
 		hsakmt_rbtree_delete(&svm_api_range_tree, n);
 		free(r);
 	}
+	svm_api_max_extent = 0;
 	pthread_mutex_unlock(&svm_api_mutex);
 
 	if (all_gpu_id_array) {
