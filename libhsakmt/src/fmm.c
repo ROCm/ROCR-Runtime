@@ -233,6 +233,9 @@ typedef struct {
 
 	/* specifies the alignment size as PAGE_SIZE * 2^alignment_order */
 	uint32_t alignment_order;
+
+	/* DEBUG/TEMPORARY: whether to skip the SVM host unregister */
+	bool skip_svm_host_unregister;
 } svm_t;
 
 /*
@@ -281,6 +284,7 @@ static svm_t svm = {
 	.userptr_for_paged_mem = false,
 	.check_userptr = false,
 	.disable_cache = false,
+	.skip_svm_host_unregister = false,
 };
 
 /* RB tree of host ranges registered via the SVM API (see svm_api_range).
@@ -1339,6 +1343,8 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	HSAuint64 aligned_addr = (HSAuint64)address - page_offset;
 	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
 	uint32_t num_gpus = all_gpu_id_array_size / sizeof(uint32_t);
+	uint32_t access_attrs = svm.skip_svm_host_unregister ? 0 : num_gpus;
+	uint32_t num_attrs = access_attrs + 2;
 	uint32_t i;
 
 	if (!g_first_gpu_mem)
@@ -1350,22 +1356,26 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	 * don't clear it here the GPU faults on the re-registered buffer. Must be
 	 * ACCESS_IN_PLACE, not ACCESS: userptr memory can't migrate, so ACCESS
 	 * would fail the restore path and still fault.
+	 *
+	 * HSA_SKIP_SVM_HOST_UNREGISTER_DEBUG skips ACCESS_IN_PLACE restore and
+	 * range tracking so unregister can be A/B tested against the prior
+	 * coherency-flags-only register path.
 	 */
-	s_attr = (num_gpus + 2) * sizeof(struct kfd_ioctl_svm_attribute);
+	s_attr = num_attrs * sizeof(struct kfd_ioctl_svm_attribute);
 	args = alloca(sizeof(*args) + s_attr);
 	args->start_addr = aligned_addr;
 	args->size = aligned_size;
 	args->op = KFD_IOCTL_SVM_OP_SET_ATTR;
-	args->nattr = num_gpus + 2;
-	for (i = 0; i < num_gpus; i++) {
+	args->nattr = num_attrs;
+	for (i = 0; i < access_attrs; i++) {
 		args->attrs[i].type = HSA_SVM_ATTR_ACCESS_IN_PLACE;
 		args->attrs[i].value = all_gpu_id_array[i];
 	}
-	args->attrs[num_gpus].type = coarse_grain ?
+	args->attrs[access_attrs].type = coarse_grain ?
 			      HSA_SVM_ATTR_CLR_FLAGS : HSA_SVM_ATTR_SET_FLAGS;
-	args->attrs[num_gpus].value = HSA_SVM_FLAG_COHERENT;
-	args->attrs[num_gpus + 1].type = ext_coherent ? HSA_SVM_ATTR_SET_FLAGS : HSA_SVM_ATTR_CLR_FLAGS ;
-	args->attrs[num_gpus + 1].value = HSA_SVM_FLAG_EXT_COHERENT;
+	args->attrs[access_attrs].value = HSA_SVM_FLAG_COHERENT;
+	args->attrs[access_attrs + 1].type = ext_coherent ? HSA_SVM_ATTR_SET_FLAGS : HSA_SVM_ATTR_CLR_FLAGS ;
+	args->attrs[access_attrs + 1].value = HSA_SVM_FLAG_EXT_COHERENT;
 
 	pr_debug("Registering to SVM %p size: %" PRIu64 "\n", (void*)aligned_addr,
 		 aligned_size);
@@ -1375,10 +1385,12 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	/* Track only once the kernel has the attributes, so a failed register
-	 * leaves nothing behind and there is no reserved extent to roll back.
-	 */
-	svm_api_range_get(address, (void *)aligned_addr, aligned_size, size);
+	if (!svm.skip_svm_host_unregister) {
+		/* Track only once the kernel has the attributes, so a failed register
+		 * leaves nothing behind and there is no reserved extent to roll back.
+		 */
+		svm_api_range_get(address, (void *)aligned_addr, aligned_size, size);
+	}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -2902,7 +2914,7 @@ HSAKMT_STATUS hsakmt_fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
-	char *maxVaAlignStr, *mfmaHighPrecisionModeStr;
+	char *maxVaAlignStr, *mfmaHighPrecisionModeStr, *skipSvmHostUnregisterStr;
 	unsigned int guardPages = 1;
 	uint64_t svm_base = 0, svm_limit = 0;
 	uint32_t svm_alignment = 0, mfma_high_precision_mode = 0;
@@ -2935,6 +2947,14 @@ HSAKMT_STATUS hsakmt_fmm_init_process_apertures(unsigned int NumNodes)
 	guardPagesStr = getenv("HSA_SVM_GUARD_PAGES");
 	if (!guardPagesStr || sscanf(guardPagesStr, "%u", &guardPages) != 1)
 		guardPages = 1;
+
+	/*
+	 * DEBUG/TEMPORARY: If HSA_SKIP_SVM_HOST_UNREGISTER_DEBUG is set to a
+	 * non-0 value, skip the SVM host unregister.
+	 */
+	skipSvmHostUnregisterStr = getenv("HSA_SKIP_SVM_HOST_UNREGISTER_DEBUG");
+	svm.skip_svm_host_unregister =
+		(skipSvmHostUnregisterStr && strcmp(skipSvmHostUnregisterStr, "0"));
 
 	mfmaHighPrecisionModeStr = getenv("HSA_HIGH_PRECISION_MODE");
 	mfma_high_precision_mode = (mfmaHighPrecisionModeStr &&
@@ -4383,6 +4403,9 @@ HSAKMT_STATUS hsakmt_fmm_deregister_memory(void *address)
 		 * SET_ATTR to revoke GPU access and clear coherency flags.
 		 */
 		if (hsakmt_is_svm_api_supported) {
+			if (svm.skip_svm_host_unregister)
+				return HSAKMT_STATUS_SUCCESS;
+
 			struct svm_revoke_range *rr = NULL;
 			int nr, i;
 
