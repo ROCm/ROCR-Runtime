@@ -417,6 +417,13 @@ hsaKmtGetQueueInfo(
     HsaQueueInfo *QueueInfo	//IN
 );
 
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueueRingDoorbell(
+    HSA_QUEUEID QueueId,
+    HSAuint64 value
+);
+
 /**
   Allows an HSA process to set/change the default and alternate memory coherency, before starting to dispatch. 
 */
@@ -566,6 +573,7 @@ hsaKmtExportDMABufHandle(
     HSAuint64 *Offset			//OUT
     );
 
+#if defined(_WIN32)
 /**
   Export GPU Memory handle
 */
@@ -577,6 +585,7 @@ hsaKmtGetMemoryHandle(
     HSAuint64 SizeInBytes,        // IN
     uint64_t* SharedMemoryHandle  // OUT
 );
+#endif
 
 /**
  Export a memory buffer for sharing with other processes
