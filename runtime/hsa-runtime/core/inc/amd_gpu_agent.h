@@ -602,6 +602,11 @@ class GpuAgent : public GpuAgentInt {
 
   lazy_ptr<core::Queue> queues_[QueueCount];
 
+  // Blit kernel on queues_[QueuePCSampling] for PC sampling setup copies, so a process that
+  // only configures PC sampling on this agent does not also create the utility queue.
+  // Declared after queues_ so it is destroyed before the queue it runs on.
+  lazy_ptr<core::Blit> pcs_blit_;
+
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;
 
