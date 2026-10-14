@@ -885,6 +885,13 @@ void GpuAgent::InitDma() {
         [blit_lambda, this, eng]() { return blit_lambda(true, queues_[QueueUtility], false, eng); });
   }
 
+  pcs_blit_.reset([this]() {
+    auto ret = CreateBlitKernel((*queues_[QueuePCSampling]).get());
+    if (ret == nullptr)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
+    return ret;
+  });
+
   // GWS queues.
   InitGWS();
 }
@@ -927,6 +934,10 @@ void GpuAgent::ReleaseResources() {
         hsa_status_t status = blit->Destroy(*this);
         assert(status == HSA_STATUS_SUCCESS);
       }
+    }
+    if (!pcs_blit_.empty()) {
+      hsa_status_t status = pcs_blit_->Destroy(*this);
+      assert(status == HSA_STATUS_SUCCESS);
     }
 
     if (ape1_base_ != 0) {
@@ -2238,7 +2249,8 @@ hsa_status_t GpuAgent::UpdateTrapHandlerWithPCS(pcs_sampling_data_t* pcs_hosttra
     }
 
     /* On non-large BAR systems, we may not be able to access device memory, so do a DmaCopy */
-    if (DmaCopy(trap_handler_tma_region_, tma_region_host, 2 * sizeof(uint64_t)) != HSA_STATUS_SUCCESS)
+    if (pcs_blit_->SubmitLinearCopyCommand(trap_handler_tma_region_, tma_region_host,
+                                           2 * sizeof(uint64_t)) != HSA_STATUS_SUCCESS)
       return HSA_STATUS_ERROR;
 
     tma_size = 2 * sizeof(uint64_t);
@@ -2765,8 +2777,8 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
     if (AMD::hsa_amd_agents_allow_access(1, &cpuAgent, NULL, pcs_data->device_data) != HSA_STATUS_SUCCESS)
       return HSA_STATUS_ERROR;
 
-    if (DmaCopy(pcs_data->device_data, device_datahost, sizeof(*device_datahost)) !=
-        HSA_STATUS_SUCCESS) {
+    if (pcs_blit_->SubmitLinearCopyCommand(pcs_data->device_data, device_datahost,
+                                           sizeof(*device_datahost)) != HSA_STATUS_SUCCESS) {
       debug_print("Failed to dmaCopy!\n");
       return HSA_STATUS_ERROR;
     }
@@ -2776,7 +2788,7 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
     size_t count_in_bytes = deviceAllocSize - sizeof(pcs_sampling_data_t);
     size_t count_in_dwords = count_in_bytes / sizeof(uint32_t);
 
-    if (DmaFill(device_buf_ptr, 0, count_in_dwords) !=
+    if (pcs_blit_->SubmitLinearFillCommand(device_buf_ptr, 0, count_in_dwords) !=
 	 HSA_STATUS_SUCCESS) {
       debug_print("Failed to dmaFill!\n");
       return HSA_STATUS_ERROR;
