@@ -89,6 +89,9 @@
 
 namespace rocr {
 
+// Set while this thread creates queues_[QueuePCSampling] through QueueCreate.
+static thread_local bool creating_pc_sampling_queue = false;
+
 namespace AMD {
 const uint64_t CP_DMA_DATA_TRANSFER_CNT_MAX = (1 << 26);
 
@@ -793,7 +796,13 @@ void GpuAgent::InitDma() {
   // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
   // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
   // other dispatches/barriers that could be in the other AQL queues.
-  queues_[QueuePCSampling].reset([queue_lambda]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
+  // The PC sampling queue is created on every agent PC sampling is configured on, including agents
+  // the process never dispatches to; it does not need the utility queue that QueueCreate pre-creates.
+  queues_[QueuePCSampling].reset([queue_lambda]() {
+    creating_pc_sampling_queue = true;
+    MAKE_SCOPE_GUARD([&]() { creating_pc_sampling_queue = false; });
+    return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM);
+  });
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev, uint32_t rec_eng) {
@@ -1775,7 +1784,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type, u
   // Ensure utility queue has been created.
   // Deferring longer risks exhausting queue count before ISA upload and invalidation capability is
   // ensured.
-  queues_[QueueUtility].touch();
+  if (!creating_pc_sampling_queue) queues_[QueueUtility].touch();
 
   bool dev_mem_queue_descriptor = (flags & HSA_AMD_QUEUE_CREATE_DEVICE_MEM_QUEUE_DESCRIPTOR) != 0;
 
