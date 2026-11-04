@@ -791,13 +791,29 @@ void GpuAgent::InitDma() {
   // Dedicated compute queue for host-to-device blits.
   queues_[QueueBlitOnly].reset(queue_lambda);
   // Share utility queue with device-to-host blits.
-  queues_[QueueUtility].reset(queue_lambda);
+  // If creating this queue fails and the PC sampling queue already exists, warn that PC sampling may
+  // have taken the last hardware queue. This does not cover the reverse order (utility queue failing
+  // before the PC sampling queue is created).
+  queues_[QueueUtility].reset([queue_lambda, this]() {
+    try {
+      return queue_lambda();
+    } catch (const AMD::hsa_exception&) {
+      if (!queues_[QueuePCSampling].empty())
+        fprintf(stderr,
+                "Warning: ROCr could not create its utility queue on node %u; the PC sampling "
+                "queue on this agent may hold the last available hardware queue.\n",
+                node_id());
+      throw;
+    }
+  });
 
   // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
   // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
   // other dispatches/barriers that could be in the other AQL queues.
   // The PC sampling queue is created on every agent PC sampling is configured on, including agents
   // the process never dispatches to; it does not need the utility queue that QueueCreate pre-creates.
+  // As a result, if only one hardware queue is left, PC sampling now takes it and the out-of-queues
+  // error appears later, e.g. from hsa_executable_freeze when the utility queue is first needed.
   queues_[QueuePCSampling].reset([queue_lambda]() {
     // Save and restore rather than clear, so nested queue construction on this thread stays correct.
     const bool prev = creating_pc_sampling_queue;
