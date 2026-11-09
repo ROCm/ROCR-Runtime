@@ -2925,8 +2925,13 @@ void GpuAgent::InvalidateCodeCaches(void *ptr, size_t size) {
     cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
   }
 
-  // Submit the command to the utility queue and wait for it to complete.
-  queues_[QueueUtility]->ExecutePM4(cache_inv, cache_inv_size_dw * sizeof(uint32_t));
+  // Submit the command to the utility queue and wait for it to complete. On an agent where only PC
+  // sampling has created a queue so far (e.g. while pcs_blit_ loads its kernels), use the PC
+  // sampling queue rather than creating the utility queue for this.
+  auto& queue = (queues_[QueueUtility].empty() && !queues_[QueuePCSampling].empty())
+                    ? queues_[QueuePCSampling]
+                    : queues_[QueueUtility];
+  queue->ExecutePM4(cache_inv, cache_inv_size_dw * sizeof(uint32_t));
 }
 
 lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(uint32_t engine_offset) {
