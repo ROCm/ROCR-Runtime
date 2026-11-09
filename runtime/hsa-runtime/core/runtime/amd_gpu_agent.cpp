@@ -89,6 +89,9 @@
 
 namespace rocr {
 
+// Set while this thread creates queues_[QueuePCSampling] through QueueCreate.
+static thread_local bool creating_pc_sampling_queue = false;
+
 namespace AMD {
 const uint64_t CP_DMA_DATA_TRANSFER_CNT_MAX = (1 << 26);
 
@@ -788,12 +791,31 @@ void GpuAgent::InitDma() {
   // Dedicated compute queue for host-to-device blits.
   queues_[QueueBlitOnly].reset(queue_lambda);
   // Share utility queue with device-to-host blits.
-  queues_[QueueUtility].reset(queue_lambda);
+  queues_[QueueUtility].reset([queue_lambda, this]() {
+    try {
+      return queue_lambda();
+    } catch (const AMD::hsa_exception&) {
+      if (!queues_[QueuePCSampling].empty())
+        fprintf(stderr,
+                "Warning: ROCr could not create its utility queue on node %u; the PC sampling "
+                "queue on this agent may hold the last available hardware queue.\n",
+                node_id());
+      throw;
+    }
+  });
 
   // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
   // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
   // other dispatches/barriers that could be in the other AQL queues.
-  queues_[QueuePCSampling].reset([queue_lambda]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
+  // The PC sampling queue is created on every agent PC sampling is configured on, including agents
+  // the process never dispatches to; it does not need the utility queue that QueueCreate pre-creates.
+  // As a result, if only one hardware queue is left, PC sampling now takes it and the out-of-queues
+  // error appears later, e.g. from hsa_executable_freeze when the utility queue is first needed.
+  queues_[QueuePCSampling].reset([queue_lambda]() {
+    creating_pc_sampling_queue = true;
+    MAKE_SCOPE_GUARD([&]() { creating_pc_sampling_queue = false; });
+    return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM);
+  });
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev, uint32_t rec_eng) {
@@ -885,6 +907,13 @@ void GpuAgent::InitDma() {
         [blit_lambda, this, eng]() { return blit_lambda(true, queues_[QueueUtility], false, eng); });
   }
 
+  pcs_blit_.reset([this]() {
+    auto ret = CreateBlitKernel((*queues_[QueuePCSampling]).get());
+    if (ret == nullptr)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
+    return ret;
+  });
+
   // GWS queues.
   InitGWS();
 }
@@ -927,6 +956,10 @@ void GpuAgent::ReleaseResources() {
         hsa_status_t status = blit->Destroy(*this);
         assert(status == HSA_STATUS_SUCCESS);
       }
+    }
+    if (!pcs_blit_.empty()) {
+      hsa_status_t status = pcs_blit_->Destroy(*this);
+      assert(status == HSA_STATUS_SUCCESS);
     }
 
     if (ape1_base_ != 0) {
@@ -1764,7 +1797,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type, u
   // Ensure utility queue has been created.
   // Deferring longer risks exhausting queue count before ISA upload and invalidation capability is
   // ensured.
-  queues_[QueueUtility].touch();
+  if (!creating_pc_sampling_queue) queues_[QueueUtility].touch();
 
   bool dev_mem_queue_descriptor = (flags & HSA_AMD_QUEUE_CREATE_DEVICE_MEM_QUEUE_DESCRIPTOR) != 0;
 
@@ -2238,7 +2271,8 @@ hsa_status_t GpuAgent::UpdateTrapHandlerWithPCS(pcs_sampling_data_t* pcs_hosttra
     }
 
     /* On non-large BAR systems, we may not be able to access device memory, so do a DmaCopy */
-    if (DmaCopy(trap_handler_tma_region_, tma_region_host, 2 * sizeof(uint64_t)) != HSA_STATUS_SUCCESS)
+    if (pcs_blit_->SubmitLinearCopyCommand(trap_handler_tma_region_, tma_region_host,
+                                           2 * sizeof(uint64_t)) != HSA_STATUS_SUCCESS)
       return HSA_STATUS_ERROR;
 
     tma_size = 2 * sizeof(uint64_t);
@@ -2765,8 +2799,8 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
     if (AMD::hsa_amd_agents_allow_access(1, &cpuAgent, NULL, pcs_data->device_data) != HSA_STATUS_SUCCESS)
       return HSA_STATUS_ERROR;
 
-    if (DmaCopy(pcs_data->device_data, device_datahost, sizeof(*device_datahost)) !=
-        HSA_STATUS_SUCCESS) {
+    if (pcs_blit_->SubmitLinearCopyCommand(pcs_data->device_data, device_datahost,
+                                           sizeof(*device_datahost)) != HSA_STATUS_SUCCESS) {
       debug_print("Failed to dmaCopy!\n");
       return HSA_STATUS_ERROR;
     }
@@ -2776,7 +2810,7 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
     size_t count_in_bytes = deviceAllocSize - sizeof(pcs_sampling_data_t);
     size_t count_in_dwords = count_in_bytes / sizeof(uint32_t);
 
-    if (DmaFill(device_buf_ptr, 0, count_in_dwords) !=
+    if (pcs_blit_->SubmitLinearFillCommand(device_buf_ptr, 0, count_in_dwords) !=
 	 HSA_STATUS_SUCCESS) {
       debug_print("Failed to dmaFill!\n");
       return HSA_STATUS_ERROR;

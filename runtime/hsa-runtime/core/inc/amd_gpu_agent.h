@@ -586,6 +586,10 @@ class GpuAgent : public GpuAgentInt {
   // Blit objects managed by an instance of GpuAgent
   std::vector<lazy_ptr<core::Blit>> blits_;
 
+  // Blit kernel on queues_[QueuePCSampling] for PC sampling setup copies, so a process that
+  // only configures PC sampling on this agent does not also create the utility queue.
+  lazy_ptr<core::Blit> pcs_blit_;
+
   // List of agents connected via xGMI
   std::vector<const core::Agent*> xgmi_peer_list_;
 
